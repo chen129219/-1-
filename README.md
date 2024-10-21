@@ -29,7 +29,8 @@
 
 输入“10101010”和“01010101”，输出为“1000000001”
 
-![image](https://github.com/user-attachments/assets/edf82570-a205-42a9-a36a-85a19aa304aa)
+![image](https://github.com/user-attachments/assets/d0ba884b-45f0-487e-bb30-8e65256d8c30)
+
 
 
 第五关：封闭测试
