@@ -14,8 +14,7 @@ class SDES:
     def fx1(self, a, b, c):
         x = 0
         for i in range(len(b)):
-            x <<= 1
-            x |= (a >> (c - b[i])) & 1
+            x = (x << 1) | ((a >> (c - b[i])) & 1)
         return x
 
     def EP_func(self, a, b):
@@ -40,21 +39,14 @@ class SDES:
         x = self.fx1(x, self.P10, 10)
         lk = (x >> 5) & 0x1f
         rk = x & 0x1f
-        lk = ((lk & 0xf) << 1) | ((lk & 0x10) >> 4)
-        rk = ((rk & 0xf) << 1) | ((rk & 0x10) >> 4)
+        # 这里需要将lk和rk左移一位，然后再进行压缩置换
+        lk = (lk << 1) | ((lk & 0x10) >> 4)
+        rk = (rk << 1) | ((rk & 0x10) >> 4)
         self.x1 = self.fx1((lk << 5) | rk, self.P8, 10)
-        lk = ((lk & 0x07) << 2) | ((lk & 0x18) >> 3)
-        rk = ((rk & 0x07) << 2) | ((rk & 0x18) >> 3)
+        # 这里需要将lk和rk进行扩展置换，然后再进行压缩置换
+        lk = (lk & 0x1e) | ((lk & 0x01) << 1)
+        rk = (rk & 0x1e) | ((rk & 0x01) << 1)
         self.x2 = self.fx1((lk << 5) | rk, self.P8, 10)
-
-    def encrypt_byte(self, byte, key):
-        self.DES(key)
-        temp = int(byte, 2)
-        temp = self.fx1(temp, self.IP, 8)
-        temp = self.fx2(temp, self.x1)
-        temp = ((temp & 0xf) << 4) | ((temp >> 4) & 0xf)
-        temp = self.fx2(temp, self.x2)
-        return self.fx1(temp, self.IP_1, 8)
 
     def decrypt_byte(self, byte, key):
         self.DES(key)
@@ -63,73 +55,64 @@ class SDES:
         temp = self.fx2(temp, self.x2)
         temp = ((temp & 0xf) << 4) | ((temp >> 4) & 0xf)
         temp = self.fx2(temp, self.x1)
-        return self.fx1(temp, self.IP_1, 8)
+        return format(self.fx1(temp, self.IP_1, 8), '08b')
 
     def check_key(self, key, encrypted_byte, expected_byte):
         decrypted_byte = self.decrypt_byte(encrypted_byte, key)
+        print(f"Testing key: {key}, decrypted: {decrypted_byte}, expected: {expected_byte}")
         return decrypted_byte == expected_byte
+
 
 def brute_force_decrypt(encrypted_byte, expected_byte, key_range):
     sdes = SDES()
-    keys_found = []
+    found_keys = []
     for i in key_range:
         key = format(i, '010b')
         if sdes.check_key(key, encrypted_byte, expected_byte):
-            keys_found.append(key)
-    return keys_found
+            print(f"Found key: {key}")
+            found_keys.append(key)
+    return found_keys
 
-def analyze_duplicate_keys(encrypted_byte, expected_byte):
-    sdes = SDES()
-    key_map = {}
-    duplicate_keys = {}
 
-    for i in range(1024):  # 2^10 possible keys
-        key = format(i, '010b')
-        cipher_text = sdes.encrypt_byte(expected_byte, key)
+def test_multiple_keys(encrypted_byte, expected_byte):
+    start_time = time.time()
 
-        if cipher_text in key_map:
-            if cipher_text not in duplicate_keys:
-                duplicate_keys[cipher_text] = [key_map[cipher_text]]
-            duplicate_keys[cipher_text].append(key)
-        else:
-            key_map[cipher_text] = key
+    # Create threads for brute force
+    threads = []
+    num_threads = 4
+    keys_per_thread = 1024 // num_threads
+    results = []
 
-    return duplicate_keys
+    for i in range(num_threads):
+        key_range = range(i * keys_per_thread, (i + 1) * keys_per_thread)
+        thread = threading.Thread(target=lambda q, arg1, arg2, arg3: q.append(brute_force_decrypt(arg1, arg2, arg3)),
+                                  args=(results, encrypted_byte, expected_byte, key_range))
+        threads.append(thread)
+        thread.start()
+
+    for thread in threads:
+        thread.join()
+
+    end_time = time.time()
+    print(f"Brute force completed in {end_time - start_time:.2f} seconds.")
+
+    # Flatten the results list
+    found_keys = [key for sublist in results for key in sublist]
+    return found_keys
+
 
 if __name__ == "__main__":
-    encrypted_byte = input("Enter the encrypted byte (8-bit binary): ")
-    expected_byte = input("Enter the expected decrypted byte (8-bit binary): ")
+    try:
+        encrypted_byte = input("Enter the encrypted byte (8-bit binary): ")
+        expected_byte = input("Enter the expected decrypted byte (8-bit binary): ")
+        if len(encrypted_byte) != 8 or len(expected_byte) != 8 or not set(encrypted_byte).issubset(
+                {'0', '1'}) or not set(expected_byte).issubset({'0', '1'}):
+            raise ValueError("Invalid input. Please enter valid 8-bit binary strings.")
 
-    # 检查输入有效性
-    if len(encrypted_byte) != 8 or len(expected_byte) != 8 or not (set(encrypted_byte) <= {'0', '1'}) or not (set(expected_byte) <= {'0', '1'}):
-        print("Invalid input. Please enter valid 8-bit binary strings.")
-    else:
-        start_time = time.time()
-
-        # Create threads for brute force
-        threads = []
-        num_threads = 4
-        keys_per_thread = 1024 // num_threads
-        keys_found = []
-
-        for i in range(num_threads):
-            key_range = range(i * keys_per_thread, (i + 1) * keys_per_thread)
-            thread = threading.Thread(target=lambda k=key_range: keys_found.extend(brute_force_decrypt(encrypted_byte, expected_byte, k)))
-            threads.append(thread)
-            thread.start()
-
-        for thread in threads:
-            thread.join()
-
-        end_time = time.time()
-        print(f"Brute force completed in {end_time - start_time:.2f} seconds.")
-
-        # 分析重复密钥
-        duplicate_keys = analyze_duplicate_keys(encrypted_byte, expected_byte)
-
-        if duplicate_keys:
-            print("Found duplicate keys producing the same ciphertext:")
-            for cipher_text, keys in duplicate_keys.items():
-                print(f"Ciphertext: {cipher_text} -> Keys: {', '.join(keys)}")
+        found_keys = test_multiple_keys(encrypted_byte, expected_byte)
+        if found_keys:
+            print(f"Found keys: {found_keys}")
         else:
-            print("No duplicate keys found for this plaintext.")
+            print("No keys found that match the given plaintext-ciphertext pair.")
+    except ValueError as e:
+        print(e)
