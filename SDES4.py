@@ -14,8 +14,7 @@ class SDES:
     def fx1(self, a, b, c):
         x = 0
         for i in range(len(b)):
-            x <<= 1
-            x |= (a >> (c - b[i])) & 1
+            x = (x << 1) | ((a >> (c - b[i])) & 1)
         return x
 
     def EP_func(self, a, b):
@@ -40,11 +39,13 @@ class SDES:
         x = self.fx1(x, self.P10, 10)
         lk = (x >> 5) & 0x1f
         rk = x & 0x1f
-        lk = ((lk & 0xf) << 1) | ((lk & 0x10) >> 4)
-        rk = ((rk & 0xf) << 1) | ((rk & 0x10) >> 4)
+        # 这里需要将lk和rk左移一位，然后再进行压缩置换
+        lk = (lk << 1) | ((lk & 0x10) >> 4)
+        rk = (rk << 1) | ((rk & 0x10) >> 4)
         self.x1 = self.fx1((lk << 5) | rk, self.P8, 10)
-        lk = ((lk & 0x07) << 2) | ((lk & 0x18) >> 3)
-        rk = ((rk & 0x07) << 2) | ((rk & 0x18) >> 3)
+        # 这里需要将lk和rk进行扩展置换，然后再进行压缩置换
+        lk = (lk & 0x1e) | ((lk & 0x01) << 1)
+        rk = (rk & 0x1e) | ((rk & 0x01) << 1)
         self.x2 = self.fx1((lk << 5) | rk, self.P8, 10)
 
     def decrypt_byte(self, byte, key):
@@ -54,11 +55,13 @@ class SDES:
         temp = self.fx2(temp, self.x2)
         temp = ((temp & 0xf) << 4) | ((temp >> 4) & 0xf)
         temp = self.fx2(temp, self.x1)
-        return self.fx1(temp, self.IP_1, 8)
+        return format(self.fx1(temp, self.IP_1, 8), '08b')
 
     def check_key(self, key, encrypted_byte, expected_byte):
         decrypted_byte = self.decrypt_byte(encrypted_byte, key)
+        print(f"Testing key: {key}, decrypted: {decrypted_byte}, expected: {expected_byte}")
         return decrypted_byte == expected_byte
+
 
 def brute_force_decrypt(encrypted_byte, expected_byte, key_range):
     sdes = SDES()
@@ -70,14 +73,15 @@ def brute_force_decrypt(encrypted_byte, expected_byte, key_range):
     print("Key not found")
     return None
 
-if __name__ == "__main__":
-    encrypted_byte = input("Enter the encrypted byte (8-bit binary): ")
-    expected_byte = input("Enter the expected decrypted byte (8-bit binary): ")
 
-    # 检查输入有效性
-    if len(encrypted_byte) != 8 or len(expected_byte) != 8 or not (set(encrypted_byte) <= {'0', '1'}) or not (set(expected_byte) <= {'0', '1'}):
-        print("Invalid input. Please enter valid 8-bit binary strings.")
-    else:
+if __name__ == "__main__":
+    try:
+        encrypted_byte = input("Enter the encrypted byte (8-bit binary): ")
+        expected_byte = input("Enter the expected decrypted byte (8-bit binary): ")
+        if len(encrypted_byte) != 8 or len(expected_byte) != 8 or not set(encrypted_byte).issubset(
+                {'0', '1'}) or not set(expected_byte).issubset({'0', '1'}):
+            raise ValueError("Invalid input. Please enter valid 8-bit binary strings.")
+
         start_time = time.time()
 
         # Create threads for brute force
@@ -96,3 +100,5 @@ if __name__ == "__main__":
 
         end_time = time.time()
         print(f"Brute force completed in {end_time - start_time:.2f} seconds.")
+    except ValueError as e:
+        print(e)
