@@ -27,9 +27,9 @@
 
 第四关：暴力破解
 
-输入“10101010”和“01010101”，输出为“1000000001”
+输入“10101010”和“01010101”，输出为“0101001011”
 
-![image](https://github.com/user-attachments/assets/d0ba884b-45f0-487e-bb30-8e65256d8c30)
+![image](https://github.com/user-attachments/assets/704e8117-92d3-45d7-a16f-2e7a07750678)
 
 
 第五关：封闭测试
