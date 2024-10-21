@@ -27,6 +27,8 @@
 
 第四关：暴力破解
 
+输入“10101010”和“01010101”，输出为“1000000001”
+
 ![image](https://github.com/user-attachments/assets/edf82570-a205-42a9-a36a-85a19aa304aa)
 
 
